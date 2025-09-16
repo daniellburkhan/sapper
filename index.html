@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Сапер — Modern HTML</title>
+  <style>
+    :root{
+      --bg:#0f1724; --panel:#0b1220; --muted:#94a3b8; --accent1:#6366f1; --accent2:#8b5cf6;
+      --cell-size:36px; --gap:4px;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0; font-family:'Inter',system-ui,sans-serif;
+      background:linear-gradient(160deg,#0f172a 0%, #1e1b4b 100%);
+      color:#f1f5f9;
+      padding:10px; display:flex; justify-content:center;
+    }
+    .container{width:100%; max-width:1100px}
+    header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px}
+    h1{font-size:20px;margin:0;font-weight:800}
+    nav.menu{display:flex;gap:10px}
+    nav.menu a{color:var(--muted);text-decoration:none;font-size:14px;padding:6px 10px;border-radius:8px}
+    nav.menu a:hover{background:rgba(255,255,255,0.08);color:white}
+    .top-controls{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+    .badge{background:rgba(255,255,255,0.06);padding:6px 10px;border-radius:10px;font-family:monospace;font-size:14px}
+    .btn{background:linear-gradient(90deg,var(--accent1),var(--accent2));border:none;padding:8px 12px;border-radius:10px;color:white;cursor:pointer;font-weight:600;transition:transform .15s}
+    .btn:active{transform:scale(0.96)}
+    select.preset{background:transparent;border:1px solid rgba(255,255,255,0.2);padding:6px 8px;border-radius:8px;color:inherit;font-size:14px}
+
+    main{display:grid;grid-template-columns:1fr 220px;gap:12px}
+    .board-wrap{background:rgba(255,255,255,0.05);padding:8px;border-radius:12px;display:flex;justify-content:center;align-items:center;overflow-x:auto}
+    .grid{display:grid;gap:var(--gap)}
+    .cell{width:var(--cell-size);height:var(--cell-size);display:flex;align-items:center;justify-content:center;border-radius:6px;background:#1e293b;cursor:pointer;user-select:none;font-weight:700;font-size:14px;transition:all .12s}
+    .cell.revealed{background:#f8fafc;color:#0f172a}
+    .cell.flagged{background:#facc15;color:#0f172a}
+    .cell.mine{background:#ef4444;color:white}
+    .sidebar{display:flex;flex-direction:column;gap:10px}
+    .card{background:var(--panel);padding:10px;border-radius:12px}
+    .status{font-size:14px}
+    footer{margin-top:10px;text-align:center;color:var(--muted);font-size:13px}
+    @media(max-width:800px){
+      main{grid-template-columns:1fr}
+      :root{--cell-size:44px}
+    }
+    .num1{color:#2563eb}.num2{color:#059669}.num3{color:#ef4444}.num4{color:#7c3aed}.num5{color:#c2410c}
+  </style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>Сапер</h1>
+    <nav class="menu">
+      <a href="#">Головна</a>
+      <a href="#rules">Правила</a>
+      <a href="#about">Про гру</a>
+    </nav>
+    <div class="top-controls">
+      <div class="badge">⛏ <span id="flags-left">0</span></div>
+      <div class="badge">⏱ <span id="timer">0</span>s</div>
+      <button class="btn" id="new-btn">🔄 Новий</button>
+      <select id="preset-select" class="preset">
+        <option>Easy</option>
+        <option selected>Medium</option>
+        <option>Hard</option>
+      </select>
+    </div>
+  </header>
+
+  <main>
+    <section class="board-wrap">
+      <div id="board-container"></div>
+    </section>
+
+    <aside class="sidebar">
+      <div class="card">
+        <div class="status">Статус:</div>
+        <div id="game-status" style="margin-top:6px;font-weight:700;font-size:16px">Готово</div>
+      </div>
+      <div class="card">
+        <button class="btn" id="hint-btn">✨ Підказка</button>
+      </div>
+    </aside>
+  </main>
+
+  <footer>Made with ❤️ — Modern Minesweeper HTML</footer>
+</div>
+
+<script>
+let rows=16,cols=16,mines=40,board=[],revealedCount=0,flagsLeft=0,timer=0,timerInt=null,gameOver=false;
+const boardContainer=document.getElementById('board-container');
+const statusEl=document.getElementById('game-status');
+const flagsEl=document.getElementById('flags-left');
+const timerEl=document.getElementById('timer');
+const presetSelect=document.getElementById('preset-select');
+
+let longPressTimer;
+
+function startGame(){
+  revealedCount=0;flagsLeft=mines;timer=0;gameOver=false;
+  clearInterval(timerInt);timerInt=setInterval(()=>{timer++;timerEl.textContent=timer},1000);
+  statusEl.textContent='Гра йде';flagsEl.textContent=flagsLeft;
+  boardContainer.innerHTML='';
+  board=Array.from({length:rows},()=>Array.from({length:cols},()=>({mine:false,revealed:false,flagged:false,adj:0})));
+  let placed=0;while(placed<mines){let r=Math.floor(Math.random()*rows),c=Math.floor(Math.random()*cols);if(!board[r][c].mine){board[r][c].mine=true;placed++;}}
+  for(let r=0;r<rows;r++){for(let c=0;c<cols;c++){if(board[r][c].mine)continue;let adj=0;for(let dr=-1;dr<=1;dr++){for(let dc=-1;dc<=1;dc++){let nr=r+dr,nc=c+dc;if(nr>=0&&nr<rows&&nc>=0&&nc<cols&&board[nr][nc].mine)adj++;}}board[r][c].adj=adj;}}
+  const grid=document.createElement('div');grid.className='grid';grid.style.gridTemplateColumns=`repeat(${cols}, var(--cell-size))`;
+  for(let r=0;r<rows;r++){
+    for(let c=0;c<cols;c++){
+      const cell=document.createElement('div');cell.className='cell';
+      cell.addEventListener('click',()=>reveal(r,c));
+      cell.addEventListener('contextmenu',e=>{e.preventDefault();toggleFlag(r,c);});
+      // мобільний довгий тап = прапор
+      cell.addEventListener('touchstart',()=>{
+        longPressTimer=setTimeout(()=>{toggleFlag(r,c);},500);
+      });
+      cell.addEventListener('touchend',()=>{clearTimeout(longPressTimer);});
+      grid.appendChild(cell);board[r][c].el=cell;
+    }
+  }
+  boardContainer.appendChild(grid);
+}
+
+function reveal(r,c){
+  const cell=board[r][c];if(cell.revealed||cell.flagged||gameOver)return;
+  cell.revealed=true;cell.el.classList.add('revealed');
+  if(cell.mine){cell.el.classList.add('mine');cell.el.textContent='💣';endGame(false);return;}
+  revealedCount++;if(cell.adj>0){cell.el.textContent=cell.adj;cell.el.classList.add('num'+cell.adj);}else{for(let dr=-1;dr<=1;dr++){for(let dc=-1;dc<=1;dc++){let nr=r+dr,nc=c+dc;if(nr>=0&&nr<rows&&nc>=0&&nc<cols)reveal(nr,nc);}}}
+  if(revealedCount===rows*cols-mines)endGame(true);
+}
+
+function toggleFlag(r,c){
+  const cell=board[r][c];if(cell.revealed||gameOver)return;
+  cell.flagged=!cell.flagged;
+  if(cell.flagged){cell.el.textContent='🚩';flagsLeft--;}else{cell.el.textContent='';flagsLeft++;}
+  flagsEl.textContent=flagsLeft;
+}
+
+function endGame(win){
+  gameOver=true;clearInterval(timerInt);
+  statusEl.textContent=win?'Перемога!':'Програш!';
+  if(!win){for(let r=0;r<rows;r++){for(let c=0;c<cols;c++){if(board[r][c].mine){board[r][c].el.textContent='💣';board[r][c].el.classList.add('mine');}}}}
+}
+
+presetSelect.addEventListener('change',()=>{
+  if(presetSelect.value==='Easy'){rows=9;cols=9;mines=10;}
+  else if(presetSelect.value==='Medium'){rows=16;cols=16;mines=40;}
+  else{rows=16;cols=30;mines=99;}
+  startGame();
+});
+
+document.getElementById('new-btn').addEventListener('click',startGame);
+startGame();
+</script>
+</body>
+</html>
